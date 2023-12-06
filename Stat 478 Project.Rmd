@@ -1,0 +1,322 @@
+---
+title: "Stat 478 Project Proposal"
+author: "Brian Bruxvoort"
+date: "2023-09-27"
+output: pdf_document
+---
+## Loading libraries,cleaning data, and modeling original model
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(dplyr)
+hitters <- read.csv("Hitters.csv")
+```
+
+```{r, message=FALSE, warning=FALSE}
+hitters <- hitters %>%
+  select(-c(AtBat, Hits, HmRun, Runs, RBI, Walks, League, Division, PutOuts, Assists, Errors, NewLeague)) %>%
+  drop_na(Salary) 
+```
+
+```{r}
+model <- lm(Salary ~ ., data = hitters)
+summary(model)
+```
+
+Original model has insignificant variables so we will try to find the best model for predicting salary.
+
+# Finding the Best Model
+```{r}
+# Mallow's Cp method of finding model with lowest AIC.
+library(leaps)
+leapout<-leaps(x=hitters[1:7], y=hitters$Salary, names=colnames(hitters)[1:7], method="Cp")
+cbind(leapout$size, leapout$which, leapout$Cp)
+```
+
+```{r}
+# Backward selection
+library(leaps)
+step(model, data=hitters, direction="backward")
+```
+
+
+
+```{r}
+# Create a null model to be able to run forward and step-wise selections
+modelNull<-lm(Salary~1, data=hitters)
+summary(modelNull)
+```
+
+```{r}
+# Forward selection
+step(modelNull, data=hitters, direction="forward", scope= ~Salary ~ Years + CAtBat + CHits + CHmRun + CRuns + CRBI + CWalks)
+```
+
+```{r}
+# Step-wise selection
+step(modelNull, data=hitters, direction="both", scope= ~Salary ~ Years + CAtBat + CHits + CHmRun + CRuns + CRBI + CWalks)
+```
+
+All four possible ways to find the best model all agreed that the best model uses CRBI, Years, CRuns, CAtBat, and CHits. 
+
+```{r}
+# Run new model with designated variables
+finalmodel <- lm(Salary ~ CRBI + Years + CRuns + CAtBat + CHits, data = hitters)
+summary(finalmodel)
+```
+
+Now that we have a better model we can and will do analysis.
+
+# Required Components 
+## Variables
+### Data Description
+Write stuff here about data.
+
+### Definition of Response and Predictor Variables
+Write stuff about how we want to predict salary based off career statistics.
+
+### Source of the Data
+Say we got the data from Kaggle.
+
+### XTX
+```{r}
+#Define X matrix
+X<-matrix(c(rep(1,263), hitters$CRBI, hitters$Years, hitters$CRuns, hitters$CAtBat, hitters$CHits), nrow=263, byrow=FALSE)
+# XTX matrix
+XTX<-t(X) %*% X
+XTX
+```
+
+```{r}
+# XTX inverse matrix
+XTX1<-solve(XTX)
+XTX1
+```
+
+We don't need this but we might want to include it.
+
+## Overall Usefulness of predicting response
+```{r}
+# Run new model with designated variables
+finalmodel <- lm(Salary ~ CRBI + Years + CRuns + CAtBat + CHits, data = hitters)
+summary(finalmodel)
+```
+
+F test says the model is useful. R^2 adjusted is not great.
+
+## Individual t-tests for marginal effects
+
+Refer back to the output above for determining t-tests
+
+## Point Prediction of Response
+```{r}
+# Predicted salary for player who has 186 career RBIs, has played for 9 years, has 192 career runs, 1876 career at bats, and 467 career hits.
+#confidence interval for mean response
+predict(finalmodel, newdata= data.frame("CRBI" = 186, "Years" = 9, "CRuns" = 192, "CAtBat" = 1876, "CHits"= 467), level=0.95, interval="confidence")
+#prediction interval for new individual
+predict(finalmodel, newdata= data.frame("CRBI" = 186, "Years" = 9, "CRuns" = 192, "CAtBat" = 1876, "CHits"= 467), level=0.95, interval="prediction")
+```
+
+Based on output, a player with 186 career RBIs, has played for 9 years, has 192 career runs, 1876 career at bats, and 467 career hits, would have a salary of 257,650 dollars. This player was in the data set and had an actual salary of 512,500 dollars. Prediction interval is large.
+
+## Assumptions of Linear Regression
+```{r}
+#Residual plots
+tresid=rstudent(finalmodel)
+par(mfrow=c(1,2))
+hist(tresid, pch=20)
+#qqnorm(tresid, pch=20)
+#qqline(tresid, col="blue")
+library(car)
+qqPlot(finalmodel)
+plot(finalmodel$fitted.values, tresid, pch=20)
+abline(h=0)
+plot(tresid, pch=20, type="o")
+abline(h=0)
+
+
+avPlots(model)
+```
+
+Looks like errors aren't normal, and there is coning an outliers in the fitted data.
+
+# Additional Components
+## Fix non constant variation
+```{r}
+finalmodel2 <- lm(log(Salary) ~ CRBI + Years + CRuns + CAtBat + CHits, data = hitters)
+summary(finalmodel2)
+```
+
+```{r}
+#Residual plots
+tresid=rstudent(finalmodel2)
+par(mfrow=c(1,2))
+hist(tresid, pch=20)
+#qqnorm(tresid, pch=20)
+#qqline(tresid, col="blue")
+library(car)
+qqPlot(finalmodel2)
+plot(finalmodel2$fitted.values, tresid, pch=20)
+abline(h=0)
+plot(tresid, pch=20, type="o")
+abline(h=0)
+```
+
+
+
+## Descriptive Statistics and Plots of Variables
+
+Write something simple about the variables we are using.
+
+```{r}
+summary(hitters$CRBI)
+hist(hitters$CRBI)
+```
+
+```{r}
+summary(hitters$Years)
+hist(hitters$Years)
+```
+
+```{r}
+summary(hitters$CRuns)
+hist(hitters$CRuns)
+```
+
+```{r}
+summary(hitters$CAtBat)
+hist(hitters$CAtBat)
+```
+
+```{r}
+summary(hitters$CHits)
+hist(hitters$CHits)
+```
+
+
+## Checks for Multicollinearity
+```{r}
+vif(finalmodel)
+```
+
+VIFs indicate an issue with multicollinearity.
+
+```{r}
+# Standardize the variables and put back into dataset
+SCRBI <- hitters$CRBI-mean(hitters$CRBI)
+SYears <- hitters$Years-mean(hitters$Years)
+SCRuns <- hitters$CRuns-mean(hitters$CRuns)
+SCAtBat <- hitters$CAtBat-mean(hitters$CAtBat)
+SCHits <- hitters$CHits-mean(hitters$CHits)
+hitters2 <- cbind(hitters, SCRBI, SYears, SCRuns, SCAtBat, SCHits)
+hitters2
+```
+
+```{r}
+# Run new model with standardized variabless
+newmodel <- lm(Salary ~ SCRBI + SYears + SCRuns + SCAtBat + SCHits, data = hitters2)
+summary(newmodel)
+vif(newmodel)
+```
+
+Standardizing the variables didn't help the VIFs.
+
+
+## Partial F-tests
+```{r}
+# Partial F-test of full original model and new final model
+anova(finalmodel, model)
+```
+Doesn't look there is much of a difference in which model is using.
+
+
+## Checks for Outliers and Influential Points
+```{r}
+#residuals for outliers
+summary(tresid)
+qt(0.025, df=263-6, lower.tail=FALSE)
+qt(0.005, df=263-6, lower.tail=FALSE)
+par(mfrow=c(1,1))
+plot(tresid, pch=20, type="o")
+abline(h=0)
+abline(h=qt(0.025, df=263-6, lower.tail=FALSE), col="blue")
+abline(h=qt(0.025, df=263-6), col="blue")
+abline(h=qt(0.005, df=263-6, lower.tail=FALSE), col="red")
+abline(h=qt(0.005, df=263-6), col="red")
+tresid[1:263]
+
+#leverages
+plot(hatvalues(finalmodel), pch=20, type="o")
+abline(h=2*6/263, col="blue")  #cutoff: 2p/n
+
+#Influential points
+#Cook's distance
+plot(cooks.distance(finalmodel), pch=20, type="o")
+abline(h=qf(0.50, df1=6, df2=263-6), col="blue")
+abline(h=1, col="red")
+
+#DFBetas
+summary(dfbetas(finalmodel))
+plot(dfbetas(finalmodel)[,1], pch=20, type="o", ylim=c(-1,2))
+lines(dfbetas(finalmodel)[,2], pch=20, type="o", col="blue")
+lines(dfbetas(finalmodel)[,3], pch=20, type="o", col="dark green")
+lines(dfbetas(finalmodel)[,4], pch=20, type="o", col="dark red")
+abline(h=2/sqrt(51))     #cutoff 2/sqrt(n)
+abline(h=-2/sqrt(51))
+
+#DFfits
+summary(dffits(finalmodel))
+plot(dffits(finalmodel), pch=20, type="o")
+abline(h=2*sqrt(6/263), col="red")     #cutoff: 2 sqrt(p/n)
+abline(h=-2*sqrt(6/263), col="red")
+```
+
+There seem to be quite an array of outliers, leverage, and influential points in the data set. The data set is large and it might be time consuming to go through and individually pick out each of these points and remove them.
+
+## Autocorrelation test
+```{r}
+#Durbin-Watson Test 
+library(car)
+dwt(finalmodel, alternative="positive")
+```
+
+## Find best model including all possible interaction terms
+### Using R-squared Adjusted
+```{r}
+predictor_combinations <- regsubsets(Salary ~ .^2, data = hitters, method = "exhaustive")
+
+# Find the best model based on different criteria (e.g., adjusted R-squared)
+best_model <- summary(predictor_combinations)$which[which.max(summary(predictor_combinations)$adjr2), ]
+
+# Display the best model
+best_model_details <- summary(predictor_combinations)
+best_model_details$which[which.max(best_model_details$adjr2), ]
+```
+
+```{r}
+# Run new model with designated variables
+finalmodel2 <- lm(Salary ~ CHits + CRBI + CWalks + Years:CHmRun, Years:CRBI, CAtBat:CHmRun, CHits:CRBI, CHmRun:CRBI, data = hitters)
+summary(finalmodel2)
+```
+
+Error in Hits for some reason and I don't know why. Don't need to include.
+
+### Using BIC Values
+```{r}
+bic_values <- summary(predictor_combinations)$bic
+
+# Find the model with the lowest BIC (which often coincides with the lowest AIC)
+best_model_index <- which.min(bic_values)
+
+# Extract details of the best model
+best_model_details <- summary(predictor_combinations)
+best_model <- coef(predictor_combinations, id = best_model_index)
+best_model
+```
+
+```{r}
+# Run new model with designated variables
+finalmodel3 <- lm(Salary ~ CAtBat + CHits + CRBI + CWalks + Years:CRBI, CHmRun:CRBI, data = hitters)
+summary(finalmodel3)
+```
+
+
